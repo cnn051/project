@@ -1,0 +1,238 @@
+{% extends 'layout.html' %}
+
+{% block title %}Alert History Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">{% if session['lang'] == 'ko' %}경보 이력 리포트{% else %}Alert History Report{% endif %}</h1>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- Filter Panel -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">{% if session['lang'] == 'ko' %}필터 옵션{% else %}Filter Options{% endif %}</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('alert_report') }}">
+                        <div class="mb-3">
+                            <label for="vessel_id" class="form-label">{% if session['lang'] == 'ko' %}선박{% else %}Vessel{% endif %}</label>
+                            <select class="form-select" id="vessel_id" name="vessel_id" onchange="this.form.submit()">
+                                <option value="">{% if session['lang'] == 'ko' %}전체 선박{% else %}All Vessels{% endif %}</option>
+                                {% for vessel in vessels %}
+                                    <option value="{{ vessel.id }}" {% if selected_vessel_id == vessel.id %}selected{% endif %}>
+                                        {{ vessel.name }} ({{ vessel.imo_number }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="asset_id" class="form-label">{% if session['lang'] == 'ko' %}자산{% else %}Asset{% endif %}</label>
+                            <select class="form-select" id="asset_id" name="asset_id" {% if not assets %}disabled{% endif %}>
+                                <option value="">{% if session['lang'] == 'ko' %}전체 자산{% else %}All Assets{% endif %}</option>
+                                {% for asset in assets %}
+                                    <option value="{{ asset.id }}" {% if selected_asset_id == asset.id %}selected{% endif %}>
+                                        {{ asset.name }} ({{ asset.ip_address }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="severity" class="form-label">{% if session['lang'] == 'ko' %}심각도{% else %}Severity{% endif %}</label>
+                            <select class="form-select" id="severity" name="severity">
+                                <option value="">{% if session['lang'] == 'ko' %}전체 심각도{% else %}All Severities{% endif %}</option>
+                                {% for severity in alert_severities %}
+                                    <option value="{{ severity.value }}" {% if selected_severity == severity.value %}selected{% endif %}>
+                                        {{ severity.value }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="status" class="form-label">{% if session['lang'] == 'ko' %}상태{% else %}Status{% endif %}</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="">{% if session['lang'] == 'ko' %}전체 상태{% else %}All Statuses{% endif %}</option>
+                                {% for status in alert_statuses %}
+                                    <option value="{{ status.value }}" {% if selected_status == status.value %}selected{% endif %}>
+                                        {{ status.value }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="start_date" class="form-label">{% if session['lang'] == 'ko' %}시작 날짜{% else %}Start Date{% endif %}</label>
+                            <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="end_date" class="form-label">{% if session['lang'] == 'ko' %}종료 날짜{% else %}End Date{% endif %}</label>
+                            <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}">
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter me-1"></i> {% if session['lang'] == 'ko' %}필터 적용{% else %}Apply Filters{% endif %}
+                            </button>
+                            
+                            {% if alerts %}
+                            <a href="{{ url_for('alert_report', vessel_id=selected_vessel_id, asset_id=selected_asset_id, severity=selected_severity, status=selected_status, start_date=start_date, end_date=end_date, export='csv') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-file-csv me-1"></i> {% if session['lang'] == 'ko' %}CSV로 내보내기{% else %}Export as CSV{% endif %}
+                            </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Report Content -->
+        <div class="col-md-8">
+            {% if alerts %}
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{% if session['lang'] == 'ko' %}경보 이력{% else %}Alert History{% endif %}</h5>
+                        <span class="badge bg-primary">{{ alerts|length }} {% if session['lang'] == 'ko' %}건{% else %}results{% endif %}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>{% if session['lang'] == 'ko' %}날짜시간{% else %}Date & Time{% endif %}</th>
+                                        <th>{% if session['lang'] == 'ko' %}제목{% else %}Title{% endif %}</th>
+                                        <th>{% if session['lang'] == 'ko' %}심각도{% else %}Severity{% endif %}</th>
+                                        <th>{% if session['lang'] == 'ko' %}상태{% else %}Status{% endif %}</th>
+                                        <th>{% if session['lang'] == 'ko' %}선박{% else %}Vessel{% endif %}</th>
+                                        <th>{% if session['lang'] == 'ko' %}자산{% else %}Asset{% endif %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for alert in alerts %}
+                                    <tr>
+                                        <td>{{ alert.created_at|replace("T", " ")|replace("Z", "")|truncate(19, True, "") }}</td>
+                                        <td>
+                                            <a href="#" data-bs-toggle="modal" data-bs-target="#alertModal{{ alert.id }}">
+                                                {{ alert.title }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            {% if alert.severity == 'critical' %}
+                                                <span class="badge bg-danger">{{ alert.severity }}</span>
+                                            {% elif alert.severity == 'high' %}
+                                                <span class="badge bg-warning text-dark">{{ alert.severity }}</span>
+                                            {% elif alert.severity == 'medium' %}
+                                                <span class="badge bg-info">{{ alert.severity }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ alert.severity }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if alert.status == 'new' %}
+                                                <span class="badge bg-danger">{{ alert.status }}</span>
+                                            {% elif alert.status == 'acknowledged' %}
+                                                <span class="badge bg-warning text-dark">{{ alert.status }}</span>
+                                            {% elif alert.status == 'resolved' %}
+                                                <span class="badge bg-success">{{ alert.status }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ alert.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ alert.vessel_name or '-' }}</td>
+                                        <td>{{ alert.asset_name or '-' }}</td>
+                                    </tr>
+                                    
+                                    <!-- Alert Detail Modal -->
+                                    <div class="modal fade" id="alertModal{{ alert.id }}" tabindex="-1" aria-labelledby="alertModalLabel{{ alert.id }}" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="alertModalLabel{{ alert.id }}">{{ alert.title }}</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="mb-3">
+                                                        <strong>{% if session['lang'] == 'ko' %}메시지{% else %}Message{% endif %}:</strong>
+                                                        <p>{{ alert.message }}</p>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <strong>{% if session['lang'] == 'ko' %}생성 시간{% else %}Created{% endif %}:</strong>
+                                                        <p>{{ alert.created_at|replace("T", " ")|replace("Z", "") }}</p>
+                                                    </div>
+                                                    {% if alert.acknowledged_at %}
+                                                    <div class="mb-3">
+                                                        <strong>{% if session['lang'] == 'ko' %}확인 시간{% else %}Acknowledged{% endif %}:</strong>
+                                                        <p>{{ alert.acknowledged_at|replace("T", " ")|replace("Z", "") }} ({{ alert.acknowledged_by }})</p>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if alert.resolved_at %}
+                                                    <div class="mb-3">
+                                                        <strong>{% if session['lang'] == 'ko' %}해결 시간{% else %}Resolved{% endif %}:</strong>
+                                                        <p>{{ alert.resolved_at|replace("T", " ")|replace("Z", "") }} ({{ alert.resolved_by }})</p>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% if session['lang'] == 'ko' %}닫기{% else %}Close{% endif %}</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    {% if session['lang'] == 'ko' %}
+                    검색 기준에 맞는 경보 이력이 없습니다. 다른 필터 옵션을 선택해 보세요.
+                    {% else %}
+                    No alert history found matching your criteria. Try adjusting your filter options.
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Enable asset dropdown when vessel is selected
+    const vesselSelect = document.getElementById('vessel_id');
+    const assetSelect = document.getElementById('asset_id');
+    
+    if (vesselSelect && assetSelect) {
+        vesselSelect.addEventListener('change', function() {
+            if (this.value) {
+                assetSelect.disabled = false;
+            } else {
+                assetSelect.disabled = true;
+                assetSelect.value = '';
+            }
+        });
+        
+        // Initialize on page load
+        assetSelect.disabled = !vesselSelect.value;
+    }
+});
+</script>
+{% endblock %}

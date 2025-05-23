@@ -1,0 +1,400 @@
+{% extends "layout.html" %}
+
+{% block title %}Security Zones - Maritime NMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2 mb-0"><i class="fas fa-shield-alt me-2"></i>Security Zones</h1>
+            <p class="text-muted">Network segmentation and security zone management in compliance with KR GC-44-K 2.402.1</p>
+        </div>
+        <div class="col-auto">
+            {% if current_user.role.name == 'ADMINISTRATOR' or current_user.role.name == 'OPERATOR' %}
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addZoneModal">
+                <i class="fas fa-plus me-1"></i> Add Zone
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Vessel Selection -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form action="{{ url_for('security_zones') }}" method="get" class="row g-3">
+                <div class="col-md-6">
+                    <label for="vessel_id" class="form-label">Select Vessel</label>
+                    <select class="form-select form-select-lg" id="vessel_id" name="vessel_id" onchange="this.form.submit()">
+                        <option value="">-- Select a vessel to view security zones --</option>
+                        {% for vessel in vessels %}
+                        <option value="{{ vessel.id }}" {% if selected_vessel and selected_vessel.id == vessel.id %}selected{% endif %}>
+                            {{ vessel.name }} (IMO: {{ vessel.imo_number }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if selected_vessel %}
+    <!-- Security Zones Visualization -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Security Zones for {{ selected_vessel.name }}</h5>
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-primary active" id="view-diagram">
+                    <i class="fas fa-project-diagram me-1"></i> Zone Diagram
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="view-network">
+                    <i class="fas fa-network-wired me-1"></i> Network View
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="security-zone-visualization" data-vessel-id="{{ selected_vessel.id }}" style="height: 600px;">
+                <!-- D3.js visualization will be rendered here -->
+            </div>
+            <div id="network-diagram" data-vessel-id="{{ selected_vessel.id }}" style="height: 500px; display: none;">
+                <!-- Network diagram will be rendered here -->
+            </div>
+            
+            <div class="mt-3 small text-muted">
+                <i class="fas fa-info-circle me-1"></i> The security zone diagram visualizes the logical separation of computer-based systems. 
+                Drag nodes to rearrange. Click on zones to see details.
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Zones List -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>Defined Security Zones</h5>
+        </div>
+        <div class="card-body">
+            {% if zones %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Risk Level</th>
+                            <th>Assets</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for zone in zones %}
+                        <tr>
+                            <td>{{ zone.name }}</td>
+                            <td>{{ zone.description }}</td>
+                            <td>
+                                <span class="badge bg-{{ zone.risk_level|default('secondary')|lower }}">
+                                    {{ zone.risk_level|default('Not Defined')|capitalize }}
+                                </span>
+                            </td>
+                            <td>{{ zone.assets|length }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('assets', vessel_id=selected_vessel.id, zone_id=zone.id) }}" class="btn btn-outline-primary">
+                                        <i class="fas fa-server me-1"></i> View Assets
+                                    </a>
+                                    {% if current_user.role.name == 'ADMINISTRATOR' or current_user.role.name == 'OPERATOR' %}
+                                    <button type="button" class="btn btn-outline-secondary" 
+                                           data-bs-toggle="modal" data-bs-target="#editZoneModal"
+                                           data-zone-id="{{ zone.id }}"
+                                           data-zone-name="{{ zone.name }}"
+                                           data-zone-description="{{ zone.description }}"
+                                           data-zone-risk="{{ zone.risk_level|default('medium') }}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                No security zones defined for this vessel. 
+                {% if current_user.role.name == 'ADMINISTRATOR' or current_user.role.name == 'OPERATOR' %}
+                Use the "Add Zone" button to create security zones.
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Security Zone Design Guidance -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Security Zone Design Guidance</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>KR GC-44-K, 2.402.1 Requirements</h6>
+                    <ul>
+                        <li>Identify logical security zones based on functionality, criticality, and risk assessment</li>
+                        <li>Establish secure connections (conduits) between zones with appropriate security controls</li>
+                        <li>Document zone and conduit diagrams</li>
+                        <li>Implement defense-in-depth strategies</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>Recommended Security Zone Types</h6>
+                    <ul>
+                        <li><strong>Control Zone:</strong> Critical operational systems (high protection)</li>
+                        <li><strong>Operations Zone:</strong> Day-to-day operational systems (medium protection)</li>
+                        <li><strong>Business Zone:</strong> Administrative systems (standard protection)</li>
+                        <li><strong>Public Zone:</strong> Systems interfacing with external networks (isolated)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        Please select a vessel to view and manage its security zones.
+    </div>
+    {% endif %}
+    
+    <!-- Add Zone Modal -->
+    {% if current_user.role.name == 'ADMINISTRATOR' or current_user.role.name == 'OPERATOR' %}
+    <div class="modal fade" id="addZoneModal" tabindex="-1" aria-labelledby="addZoneModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addZoneModalLabel">Add Security Zone</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addZoneForm">
+                        <div class="mb-3">
+                            <label for="zone_name" class="form-label">Zone Name</label>
+                            <input type="text" class="form-control" id="zone_name" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="zone_description" class="form-label">Description</label>
+                            <textarea class="form-control" id="zone_description" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="zone_risk_level" class="form-label">Risk Level</label>
+                            <select class="form-select" id="zone_risk_level" name="risk_level" required>
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="zone_vessel" class="form-label">Vessel</label>
+                            <select class="form-select" id="zone_vessel" name="vessel_id" required>
+                                {% for vessel in vessels %}
+                                <option value="{{ vessel.id }}" {% if selected_vessel and selected_vessel.id == vessel.id %}selected{% endif %}>
+                                    {{ vessel.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveNewZone()">Save Zone</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Zone Modal -->
+    <div class="modal fade" id="editZoneModal" tabindex="-1" aria-labelledby="editZoneModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editZoneModalLabel">Edit Security Zone</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editZoneForm">
+                        <input type="hidden" id="edit_zone_id" name="id">
+                        
+                        <div class="mb-3">
+                            <label for="edit_zone_name" class="form-label">Zone Name</label>
+                            <input type="text" class="form-control" id="edit_zone_name" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="edit_zone_description" class="form-label">Description</label>
+                            <textarea class="form-control" id="edit_zone_description" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="edit_zone_risk_level" class="form-label">Risk Level</label>
+                            <select class="form-select" id="edit_zone_risk_level" name="risk_level" required>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="updateZone()">Update Zone</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Visualization JavaScript -->
+<script src="{{ url_for('static', filename='js/visualizations.js') }}"></script>
+<script>
+// Toggle between zone diagram and network view
+document.addEventListener('DOMContentLoaded', function() {
+    const viewDiagramBtn = document.getElementById('view-diagram');
+    const viewNetworkBtn = document.getElementById('view-network');
+    const zoneDiagram = document.getElementById('security-zone-visualization');
+    const networkDiagram = document.getElementById('network-diagram');
+    
+    if (viewDiagramBtn && viewNetworkBtn) {
+        viewDiagramBtn.addEventListener('click', function() {
+            zoneDiagram.style.display = 'block';
+            networkDiagram.style.display = 'none';
+            viewDiagramBtn.classList.add('active');
+            viewNetworkBtn.classList.remove('active');
+        });
+        
+        viewNetworkBtn.addEventListener('click', function() {
+            zoneDiagram.style.display = 'none';
+            networkDiagram.style.display = 'block';
+            viewDiagramBtn.classList.remove('active');
+            viewNetworkBtn.classList.add('active');
+        });
+    }
+    
+    // Edit zone modal population
+    const editZoneModal = document.getElementById('editZoneModal');
+    if (editZoneModal) {
+        editZoneModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const zoneId = button.getAttribute('data-zone-id');
+            const zoneName = button.getAttribute('data-zone-name');
+            const zoneDescription = button.getAttribute('data-zone-description');
+            const zoneRisk = button.getAttribute('data-zone-risk');
+            
+            document.getElementById('edit_zone_id').value = zoneId;
+            document.getElementById('edit_zone_name').value = zoneName;
+            document.getElementById('edit_zone_description').value = zoneDescription;
+            document.getElementById('edit_zone_risk_level').value = zoneRisk;
+        });
+    }
+});
+
+// Functions for zone management
+function saveNewZone() {
+    // Get form values
+    const name = document.getElementById('zone_name').value;
+    const description = document.getElementById('zone_description').value;
+    const risk_level = document.getElementById('zone_risk_level').value;
+    const vessel_id = document.getElementById('zone_vessel').value;
+    
+    // Validate
+    if (!name) {
+        alert('Please enter a zone name');
+        return;
+    }
+    
+    if (!vessel_id) {
+        alert('Please select a vessel');
+        return;
+    }
+    
+    // Create request data
+    const data = {
+        name: name,
+        description: description,
+        risk_level: risk_level,
+        vessel_id: parseInt(vessel_id)
+    };
+    
+    // Send to server
+    fetch('/api/security_zones', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Reload the page to show the new zone
+            window.location.href = '/security_zones?vessel_id=' + vessel_id;
+        } else {
+            alert('Error creating security zone: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error creating security zone. Please try again.');
+    });
+}
+
+function updateZone() {
+    // Get form values
+    const id = document.getElementById('edit_zone_id').value;
+    const name = document.getElementById('edit_zone_name').value;
+    const description = document.getElementById('edit_zone_description').value;
+    const risk_level = document.getElementById('edit_zone_risk_level').value;
+    
+    // Validate
+    if (!name) {
+        alert('Please enter a zone name');
+        return;
+    }
+    
+    // Create request data
+    const data = {
+        id: parseInt(id),
+        name: name,
+        description: description,
+        risk_level: risk_level
+    };
+    
+    // Send to server
+    fetch('/api/security_zones/' + id, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Reload the page to show the updated zone
+            window.location.reload();
+        } else {
+            alert('Error updating security zone: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error updating security zone. Please try again.');
+    });
+}
+</script>
+{% endblock %}
