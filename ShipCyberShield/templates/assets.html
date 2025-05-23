@@ -1,0 +1,319 @@
+{% extends 'base.html' %}
+
+{% block title %}Assets{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="display-5 mb-4">Assets</h1>
+            
+            <!-- Network Scan Button -->
+            <div class="mb-4">
+                <button type="button" class="btn btn-primary" id="scanButton">
+                    <i class="fas fa-search me-2"></i>Network Scan
+                </button>
+            </div>
+            
+            <!-- 스캔 결과 알림 -->
+            <div id="scanAlert" class="alert d-none mb-4"></div>
+            
+            <!-- Assets Table -->
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-dark border-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Asset List</h5>
+                    <span class="badge bg-primary">{{ assets|length }} assets</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>IP Address</th>
+                                    <th>Status</th>
+                                    <th>Last Scan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assetsTableBody">
+                                {% for asset in assets %}
+                                <tr>
+                                    <td>{{ asset.name }}</td>
+                                    <td>{{ asset.asset_type }}</td>
+                                    <td>{{ asset.ip_address }}</td>
+                                    <td>
+                                        <span class="badge {% if asset.status == 'online' %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ asset.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ asset.last_scan.strftime('%Y-%m-%d %H:%M:%S') if asset.last_scan else 'Never' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Network Scan Modal -->
+<div class="modal fade" id="scanModal" tabindex="-1" aria-labelledby="scanModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="scanModalLabel">Network Scan Results</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 스캔 진행 상태 -->
+                <div id="scanProgress" class="mb-4">
+                    <div class="progress bg-dark">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="text-center mt-2" id="scanStatus">Initializing scan...</div>
+                </div>
+                
+                <!-- 숨겨진 subnet 필드 -->
+                <input type="hidden" id="subnet" value="192.168.1.0/24">
+                
+                <!-- 스캔 결과 테이블 -->
+                <div id="scanResults" class="table-responsive d-none">
+                    <table class="table table-dark table-hover">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Hostname</th>
+                                <th>Device Type</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scanResultsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scanButton = document.getElementById('scanButton');
+    const scanModal = new bootstrap.Modal(document.getElementById('scanModal'));
+    const scanProgress = document.getElementById('scanProgress');
+    const scanResults = document.getElementById('scanResults');
+    const scanResultsBody = document.getElementById('scanResultsBody');
+    const progressBar = document.querySelector('.progress-bar');
+    const scanStatus = document.getElementById('scanStatus');
+    const scanAlert = document.getElementById('scanAlert');
+    
+    scanButton.addEventListener('click', function() {
+        // 모달 초기화
+        scanProgress.classList.remove('d-none');
+        scanResults.classList.add('d-none');
+        progressBar.style.width = '0%';
+        scanStatus.textContent = 'Initializing scan...';
+        scanResultsBody.innerHTML = '';
+        
+        // 모달 표시
+        scanModal.show();
+        
+        // 타임아웃 설정
+        let scanTimeout;
+        let progressInterval;
+        let currentProgress = 0;
+        
+        // 진행 상태 업데이트 함수
+        function updateProgress() {
+            if (currentProgress < 90) {
+                currentProgress += 1;
+                progressBar.style.width = currentProgress + '%';
+                
+                // 진행 상태에 따른 메시지 업데이트
+                if (currentProgress < 20) {
+                    scanStatus.textContent = '네트워크 초기화 중...';
+                } else if (currentProgress < 50) {
+                    scanStatus.textContent = '호스트 검색 중...';
+                } else if (currentProgress < 80) {
+                    scanStatus.textContent = '장치 정보 수집 중...';
+                } else {
+                    scanStatus.textContent = '결과 처리 중...';
+                }
+            }
+        }
+        
+        // 진행 상태 업데이트 시작
+        progressInterval = setInterval(updateProgress, 300);
+        
+        // 스캔 타임아웃 설정 (60초)
+        scanTimeout = setTimeout(() => {
+            clearInterval(progressInterval);
+            scanStatus.textContent = '스캔 시간이 초과되었습니다. 서브넷을 더 작게 설정하거나 다시 시도해주세요.';
+            progressBar.style.width = '100%';
+            progressBar.classList.remove('progress-bar-animated');
+            progressBar.classList.add('bg-danger');
+            
+            // 에러 알림 표시
+            scanAlert.classList.remove('d-none', 'alert-success');
+            scanAlert.classList.add('alert-danger');
+            scanAlert.textContent = '스캔 시간이 초과되었습니다.';
+        }, 60000); // 60초 타임아웃
+        
+        // 서버의 기본 서브넷 가져오기
+        fetch('/api/scan_network')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to get subnet information');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // 서브넷 설정
+                const subnet = data.default_subnet || "192.168.1.0/24";
+                document.getElementById('subnet').value = subnet;
+                scanStatus.textContent = `서브넷 ${subnet} 스캔 중...`;
+                progressBar.style.width = '10%';
+                
+                console.log("Sending scan request with subnet:", subnet);
+                
+                // 네트워크 스캔 실행
+                return fetch('/api/scan_network', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        subnet: subnet,
+                        add_all_to_assets: true  // 모든 장치를 자산에 추가하도록 플래그 설정
+                    })
+                });
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Network scan request failed');
+                    });
+                }
+                progressBar.style.width = '80%';
+                scanStatus.textContent = '결과 처리 중...';
+                return response.json();
+            })
+            .then(data => {
+                // 타임아웃 및 진행 상태 업데이트 중지
+                clearTimeout(scanTimeout);
+                clearInterval(progressInterval);
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // 결과 표시
+                scanProgress.classList.add('d-none');
+                scanResults.classList.remove('d-none');
+                
+                // 결과 테이블 채우기
+                scanResultsBody.innerHTML = '';
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(device => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${device.ip}</td>
+                            <td>${device.hostname || 'Unknown'}</td>
+                            <td>${device.device_type || 'Unknown'}</td>
+                            <td><span class="badge bg-success">Online</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-success" disabled>
+                                    Added to Inventory
+                                </button>
+                            </td>
+                        `;
+                        scanResultsBody.appendChild(row);
+                    });
+                } else {
+                    scanResultsBody.innerHTML = '<tr><td colspan="5" class="text-center">발견된 장치가 없습니다.</td></tr>';
+                }
+                
+                // 알림 표시
+                scanAlert.classList.remove('d-none', 'alert-danger');
+                scanAlert.classList.add('alert-success');
+                scanAlert.textContent = `네트워크 스캔 완료. ${data.results ? data.results.length : 0}개 장치 발견 및 자산 목록에 추가됨.`;
+                
+                // 페이지 새로고침하여 업데이트된 자산 목록 표시
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
+            })
+            .catch(error => {
+                // 타임아웃 및 진행 상태 업데이트 중지
+                clearTimeout(scanTimeout);
+                clearInterval(progressInterval);
+                
+                console.error('Scan error:', error);
+                progressBar.style.width = '100%';
+                scanStatus.textContent = `오류: ${error.message}`;
+                scanProgress.classList.add('d-none');
+                scanResults.classList.remove('d-none');
+                scanResultsBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">스캔 중 오류가 발생했습니다: ' + error.message + '</td></tr>';
+                
+                // 에러 알림 표시
+                scanAlert.classList.remove('d-none', 'alert-success');
+                scanAlert.classList.add('alert-danger');
+                scanAlert.textContent = `오류: ${error.message}`;
+            });
+    });
+    
+    // 장치 추가 버튼 이벤트 처리
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('add-device')) {
+            const button = e.target;
+            const ip = button.dataset.ip;
+            const hostname = button.dataset.hostname;
+            const deviceType = button.dataset.type;
+            
+            // 장치 추가 API 호출
+            fetch('/api/add_asset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'ip': ip,
+                    'name': hostname,
+                    'device_type': deviceType
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 성공 알림
+                    scanAlert.classList.remove('d-none', 'alert-danger');
+                    scanAlert.classList.add('alert-success');
+                    scanAlert.textContent = `Device ${hostname} (${ip}) added to inventory.`;
+                    
+                    // 버튼 비활성화
+                    button.disabled = true;
+                    button.textContent = 'Added';
+                } else {
+                    throw new Error(data.error || 'Failed to add device');
+                }
+            })
+            .catch(error => {
+                scanAlert.classList.remove('d-none', 'alert-success');
+                scanAlert.classList.add('alert-danger');
+                scanAlert.textContent = `Error: ${error.message}`;
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,209 @@
+{% extends 'layout.html' %}
+
+{% block title %}Database Retention Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">{% if session['lang'] == 'ko' %}데이터베이스 보존 관리{% else %}Database Retention Management{% endif %}</h1>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- Current Stats -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">{% if session['lang'] == 'ko' %}현재 데이터베이스 통계{% else %}Current Database Statistics{% endif %}</h5>
+                </div>
+                <div class="card-body">
+                    {% if stats %}
+                        <div class="mb-4">
+                            <h6>{% if session['lang'] == 'ko' %}센서 데이터{% else %}Sensor Data{% endif %}</h6>
+                            <div class="list-group">
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}총 레코드 수{% else %}Total Records{% endif %}</span>
+                                    <span class="badge bg-primary rounded-pill">{{ stats.sensor_data.count }}</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}가장 오래된 레코드{% else %}Oldest Record{% endif %}</span>
+                                    <span>{{ stats.sensor_data.oldest|replace("T", " ")|replace("Z", "") if stats.sensor_data.oldest else 'N/A' }}</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}최신 레코드{% else %}Newest Record{% endif %}</span>
+                                    <span>{{ stats.sensor_data.newest|replace("T", " ")|replace("Z", "") if stats.sensor_data.newest else 'N/A' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h6>{% if session['lang'] == 'ko' %}경보{% else %}Alerts{% endif %}</h6>
+                            <div class="list-group">
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}총 레코드 수{% else %}Total Records{% endif %}</span>
+                                    <span class="badge bg-primary rounded-pill">{{ stats.alerts.count }}</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}가장 오래된 레코드{% else %}Oldest Record{% endif %}</span>
+                                    <span>{{ stats.alerts.oldest|replace("T", " ")|replace("Z", "") if stats.alerts.oldest else 'N/A' }}</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}최신 레코드{% else %}Newest Record{% endif %}</span>
+                                    <span>{{ stats.alerts.newest|replace("T", " ")|replace("Z", "") if stats.alerts.newest else 'N/A' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h6>{% if session['lang'] == 'ko' %}보안 로그{% else %}Security Logs{% endif %}</h6>
+                            <div class="list-group">
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}총 레코드 수{% else %}Total Records{% endif %}</span>
+                                    <span class="badge bg-primary rounded-pill">{{ stats.security_logs.count }}</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}가장 오래된 레코드{% else %}Oldest Record{% endif %}</span>
+                                    <span>{{ stats.security_logs.oldest|replace("T", " ")|replace("Z", "") if stats.security_logs.oldest else 'N/A' }}</span>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{% if session['lang'] == 'ko' %}최신 레코드{% else %}Newest Record{% endif %}</span>
+                                    <span>{{ stats.security_logs.newest|replace("T", " ")|replace("Z", "") if stats.security_logs.newest else 'N/A' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            {% if session['lang'] == 'ko' %}
+                            데이터베이스 통계를 로드할 수 없습니다.
+                            {% else %}
+                            Unable to load database statistics.
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    
+                    {% if cleanup_results %}
+                        <div class="alert alert-success">
+                            <h6>{% if session['lang'] == 'ko' %}정리 결과{% else %}Cleanup Results{% endif %}</h6>
+                            <ul class="mb-0">
+                                <li>{% if session['lang'] == 'ko' %}센서 데이터{% else %}Sensor Data{% endif %}: {{ cleanup_results.sensor_data }} {% if session['lang'] == 'ko' %}레코드 삭제됨{% else %}records deleted{% endif %}</li>
+                                <li>{% if session['lang'] == 'ko' %}경보{% else %}Alerts{% endif %}: {{ cleanup_results.alerts }} {% if session['lang'] == 'ko' %}레코드 삭제됨{% else %}records deleted{% endif %}</li>
+                                <li>{% if session['lang'] == 'ko' %}보안 로그{% else %}Security Logs{% endif %}: {{ cleanup_results.security_logs }} {% if session['lang'] == 'ko' %}레코드 삭제됨{% else %}records deleted{% endif %}</li>
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Retention Settings -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">{% if session['lang'] == 'ko' %}보존 정책 구성{% else %}Retention Policy Configuration{% endif %}</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('database_retention') }}" onsubmit="return confirm('{% if session['lang'] == 'ko' %}경고: 이 작업은 되돌릴 수 없으며 오래된 데이터를 영구적으로 삭제합니다. 계속하시겠습니까?{% else %}Warning: This action is irreversible and will permanently delete old data. Do you want to continue?{% endif %}');">
+                        <div class="mb-3">
+                            <label for="sensor_data_days" class="form-label">{% if session['lang'] == 'ko' %}센서 데이터 보존 기간 (일){% else %}Sensor Data Retention (days){% endif %}</label>
+                            <input type="number" class="form-control" id="sensor_data_days" name="sensor_data_days" min="30" value="{{ settings.sensor_data_days }}" required>
+                            <div class="form-text">
+                                {% if session['lang'] == 'ko' %}
+                                운영 목적으로 적어도 30일. 권장: 90일.
+                                {% else %}
+                                Minimum 30 days for operational purposes. Recommended: 90 days.
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="alert_days" class="form-label">{% if session['lang'] == 'ko' %}경보 보존 기간 (일){% else %}Alert Retention (days){% endif %}</label>
+                            <input type="number" class="form-control" id="alert_days" name="alert_days" min="90" value="{{ settings.alert_days }}" required>
+                            <div class="form-text">
+                                {% if session['lang'] == 'ko' %}
+                                사고 조사를 위한 최소 90일. 권장: 180일.
+                                {% else %}
+                                Minimum 90 days for incident investigation. Recommended: 180 days.
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="security_log_days" class="form-label">{% if session['lang'] == 'ko' %}보안 로그 보존 기간 (일){% else %}Security Log Retention (days){% endif %}</label>
+                            <input type="number" class="form-control" id="security_log_days" name="security_log_days" min="180" value="{{ settings.security_log_days }}" required>
+                            <div class="form-text">
+                                {% if session['lang'] == 'ko' %}
+                                KR GC-44-K 준수를 위한 최소 180일. 권장: 365일.
+                                {% else %}
+                                Minimum 180 days for KR GC-44-K compliance. Recommended: 365 days.
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            {% if session['lang'] == 'ko' %}
+                            데이터 정리는 영구적인 작업이며 되돌릴 수 없습니다. 중요한 데이터는 정리 전에 백업하는 것이 좋습니다.
+                            {% else %}
+                            Data cleanup is a permanent operation and cannot be undone. It is recommended to backup important data before cleanup.
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash-alt me-1"></i> {% if session['lang'] == 'ko' %}오래된 데이터 정리{% else %}Clean Up Old Data{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">{% if session['lang'] == 'ko' %}데이터베이스 관리 정보{% else %}Database Management Information{% endif %}</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        {% if session['lang'] == 'ko' %}
+                        <strong>센서 데이터:</strong> 자세한 성능 지표 및 상태 정보를 포함합니다. 이 데이터는 일상적인 운영을 위해 유용하지만 장기간 보관할 필요는 없습니다.
+                        {% else %}
+                        <strong>Sensor Data:</strong> Contains detailed performance metrics and status information. This data is useful for day-to-day operations but doesn't need to be kept for extended periods.
+                        {% endif %}
+                    </p>
+                    <p class="mb-2">
+                        {% if session['lang'] == 'ko' %}
+                        <strong>경보:</strong> 시스템에서 생성된 알림 및 알람입니다. 해결된 경보는 사고 조사 기간 이후에 정리할 수 있습니다.
+                        {% else %}
+                        <strong>Alerts:</strong> Notifications and alarms generated by the system. Resolved alerts can be cleaned up after the incident investigation period.
+                        {% endif %}
+                    </p>
+                    <p class="mb-2">
+                        {% if session['lang'] == 'ko' %}
+                        <strong>보안 로그:</strong> 접속 시도, 구성 변경 및 보안 관련 이벤트 등을 포함합니다. 이러한 로그는 규정 준수 및 감사 목적으로 더 오래 유지해야 합니다.
+                        {% else %}
+                        <strong>Security Logs:</strong> Includes access attempts, configuration changes, and security-related events. These logs should be kept longer for compliance and auditing purposes.
+                        {% endif %}
+                    </p>
+                    <p class="mb-0">
+                        {% if session['lang'] == 'ko' %}
+                        <strong>참고:</strong> KR GC-44-K 지침에서는 선박의 보안 이벤트를 최소 6개월(180일) 이상 보관할 것을 권장합니다.
+                        {% else %}
+                        <strong>Note:</strong> The KR GC-44-K guidance recommends keeping security events for vessels for a minimum of 6 months (180 days).
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

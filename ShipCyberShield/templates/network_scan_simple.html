@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block title %}Network Scanner{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="display-5 mb-4">Network Scanner</h1>
+            
+            <div class="card bg-dark border-secondary mb-4">
+                <div class="card-header bg-dark border-secondary">
+                    <h5 class="card-title mb-0">Scan Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form id="scanForm">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="subnet" class="form-label">Network Subnet</label>
+                                <input type="text" class="form-control" id="subnet" name="subnet" 
+                                       value="{{ default_subnet }}" required>
+                                <div class="form-text text-muted">Detected server subnet: {{ default_subnet }}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary" id="scanButton">
+                                <i class="fas fa-search me-2"></i>Start Scan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 로딩 인디케이터 -->
+            <div id="loadingIndicator" class="text-center d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Scanning network...</p>
+            </div>
+            
+            <!-- 스캔 결과 알림 -->
+            <div id="scanAlert" class="alert d-none mb-4"></div>
+            
+            <!-- 저장된 장치 목록 -->
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-dark border-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Saved Devices</h5>
+                    <span class="badge bg-primary">{{ saved_devices|length }} devices</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped">
+                            <thead>
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>Hostname</th>
+                                    <th>Status</th>
+                                    <th>Last Scan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="devicesTableBody">
+                                {% for device in saved_devices %}
+                                <tr>
+                                    <td>{{ device.ip_address }}</td>
+                                    <td>{{ device.name }}</td>
+                                    <td>
+                                        <span class="badge {% if device.status == 'online' %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ device.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ device.last_scan.strftime('%Y-%m-%d %H:%M:%S') if device.last_scan else 'Never' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scanForm = document.getElementById('scanForm');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const scanButton = document.getElementById('scanButton');
+    const scanAlert = document.getElementById('scanAlert');
+    const devicesTableBody = document.getElementById('devicesTableBody');
+    
+    if (scanForm) {
+        scanForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // UI 상태 업데이트
+            loadingIndicator.classList.remove('d-none');
+            scanButton.disabled = true;
+            scanAlert.classList.add('d-none');
+            
+            try {
+                const response = await fetch('/api/scan_network', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        subnet: document.getElementById('subnet').value
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 성공 메시지 표시
+                    scanAlert.className = 'alert alert-success';
+                    scanAlert.textContent = `Scan completed. Added ${data.added_count} new devices.`;
+                    
+                    // 테이블 업데이트
+                    devicesTableBody.innerHTML = data.saved_devices.map(device => `
+                        <tr>
+                            <td>${device.ip_address}</td>
+                            <td>${device.name}</td>
+                            <td>
+                                <span class="badge ${device.status === 'online' ? 'bg-success' : 'bg-danger'}">
+                                    ${device.status}
+                                </span>
+                            </td>
+                            <td>${device.last_scan || 'Never'}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    throw new Error(data.error || 'Scan failed');
+                }
+            } catch (error) {
+                // 에러 메시지 표시
+                scanAlert.className = 'alert alert-danger';
+                scanAlert.textContent = `Error: ${error.message}`;
+            } finally {
+                // UI 상태 복원
+                loadingIndicator.classList.add('d-none');
+                scanButton.disabled = false;
+                scanAlert.classList.remove('d-none');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
