@@ -1,0 +1,52 @@
+Configuring alert thresholds and alert settings to effectively monitor the vessel system is a key feature of the NMS (Network Management System). Based on the WhatsUp Gold proposal and the Korea Shipping Company's Cyber Resilience Guidelines, I will explain how to set these two.
+
+1. Set Alert Threshold
+The warning threshold is a reference point for notifications that are considered 'abnormal' when the data being monitored exceeds or falls below a certain criterion.
+
+Key concepts:
+
+Performance Threshold: Set to performance indicators expressed in numbers, such as CPU utilization, memory utilization, disk utilization, network traffic, engine temperature, and fuel remaining, e.g. "If CPU utilization lasts for more than one hour over 90 percent."
+State Threshold: Set it to a binary state, such as Up/Down for an equipment or service, for example, "Consider it Down if there is no ping response for more than 2 minutes" or "If certain service ports are closed."
+
+Log Threshold: Set when certain log messages (syslog, Windows Event Log, etc.) occur, or logs with certain keywords, error codes, and severity are detected more than a certain number of times.
+To set up (within the NMS system):
+
+Select what to monitor: Select the ship system (CBS), network equipment, sensors, or specific services (e.g., web services, databases) to set notifications.
+Select Monitor Type: Determines the type of indicator you want to monitor, such as Performance, Active, and Passive.
+Define Indicators and Thresholds:
+Performance Indicators: Select the performance indicators to monitor, such as CPU, memory, disk, and network interfaces.
+
+Thresholds: Set specific upper or lower limits for the indicator (for example, CPU > 90%, temperature > 95°C).
+Duration: Sets how long the threshold must be exceeded to cause notification (e.g., 5 minutes, 1 hour).
+Threshold Rating: You can set the severity level of thresholds, such as Warning and Critical, in several stages.
+Managing Thresholds: Provide a user interface that allows you to easily add, modify, and delete thresholds within the NMS dashboard.
+2. Notification Settings
+Notification settings define who, in what way, receives content when an alert threshold is triggered.
+
+Key concepts:
+
+Action Type:
+Email (E-mail): The most common way to send notifications to a set email address.
+
+
+
+SMS (text message): Send an emergency notification to your phone.
+Web Alarm / Dashboard—Places a notification center within the NMS Web dashboard to display a list of notifications in real time.
+
+Application Integration: Send notification messages to collaboration tools such as Microsoft Teams and Slack.
+Sound Notification (Sound)—Increates notifications by sound (voice) from the NMS Administrator console.
+Script Execution: When a specific event occurs, you can run a custom script to perform complex automation tasks.
+Recipient: Specifies the individual (system administrator, crew) or group to receive the notification.
+Content: Allows you to customize information (such as equipment name, time of occurrence, problem type, current value, threshold, etc.) to be included in the notification message.
+Notification Frequency/Policy: You can set how often to send notifications when the same problem repeats, and whether to send notifications only in a specific time zone (for example, at night).
+To set up (within the NMS system):
+
+Create a notification policy—Create a notification policy that links the conditions that cause the notification (when any threshold is triggered) to the action to take (what to do).
+Action Definition:
+Email: Set sender address, recipient address, email subject, and body template.
+SMS/Messenger: Set API interworking information for related services and define message templates.
+Web Alerts—Defines the types and priorities that will appear in the alerts list on the dashboard.
+Interworking notification triggers: When the monitoring system detects data that violates the threshold, it takes the action according to the notification policy set.
+Log History: All notification occurrence histories must be recorded in detail in the database. This will later be used as a security audit record required by the Problem Analysis and Korea Shipment Guidelines (2.403.1.4.(a) Network Operations Monitoring, 3.401.13 Auditable Incident).
+Manage and query alerts: Provides the ability to view alerts that occur on the NMS dashboard in real time, search past notification history, and record actions (e.g., confirmation, resolution) for alerts.
+These threshold setting and notification configurations are essential for early detection of anomalies in the ship system and quick response to reduce dangerous situations against human safety, ship safety, and environmental threats.

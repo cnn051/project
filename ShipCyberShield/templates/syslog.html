@@ -1,0 +1,250 @@
+{% extends 'layout.html' %}
+
+{% block title %}Syslog Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">{% if session['lang'] == 'ko' %}시스템 로그 관리{% else %}System Log Management{% endif %}</h1>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Syslog Server Management -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">{% if session['lang'] == 'ko' %}Syslog 서버 관리{% else %}Syslog Server Management{% endif %}</h5>
+            <span class="badge {% if server_status.running %}bg-success{% else %}bg-danger{% endif %} ms-2">
+                {% if server_status.running %}
+                {% if session['lang'] == 'ko' %}실행 중{% else %}Running{% endif %}
+                {% else %}
+                {% if session['lang'] == 'ko' %}중지됨{% else %}Stopped{% endif %}
+                {% endif %}
+            </span>
+        </div>
+        <div class="card-body">
+            {% if server_status.running %}
+            <div class="alert alert-info">
+                {% if session['lang'] == 'ko' %}
+                Syslog 서버가 {{ server_status.host }}:{{ server_status.port }}에서 실행 중입니다. 이 주소로 네트워크 장치 및 시스템을 구성하여 Syslog 메시지를 전송하세요.
+                {% else %}
+                Syslog server is running on {{ server_status.host }}:{{ server_status.port }}. Configure your network devices and systems to send Syslog messages to this address.
+                {% endif %}
+            </div>
+            <form method="POST" class="d-inline">
+                <button type="submit" name="action" value="stop_server" class="btn btn-danger">
+                    <i class="fas fa-stop-circle me-1"></i> {% if session['lang'] == 'ko' %}서버 중지{% else %}Stop Server{% endif %}
+                </button>
+            </form>
+            {% else %}
+            <form method="POST" class="row g-3">
+                <div class="col-md-4">
+                    <label for="host" class="form-label">{% if session['lang'] == 'ko' %}호스트{% else %}Host{% endif %}</label>
+                    <input type="text" class="form-control" id="host" name="host" value="0.0.0.0" required>
+                    <div class="form-text">{% if session['lang'] == 'ko' %}모든 인터페이스를 수신하려면 0.0.0.0을 사용하세요{% else %}Use 0.0.0.0 to listen on all interfaces{% endif %}</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="port" class="form-label">{% if session['lang'] == 'ko' %}포트{% else %}Port{% endif %}</label>
+                    <input type="number" class="form-control" id="port" name="port" value="514" min="1" max="65535" required>
+                    <div class="form-text">{% if session['lang'] == 'ko' %}표준 Syslog 포트는 514입니다{% else %}Standard Syslog port is 514{% endif %}</div>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" name="action" value="start_server" class="btn btn-primary">
+                        <i class="fas fa-play-circle me-1"></i> {% if session['lang'] == 'ko' %}서버 시작{% else %}Start Server{% endif %}
+                    </button>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Syslog Messages Filter -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header">
+            <h5 class="mb-0">{% if session['lang'] == 'ko' %}로그 메시지 필터{% else %}Log Messages Filter{% endif %}</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label for="facility" class="form-label">{% if session['lang'] == 'ko' %}시설{% else %}Facility{% endif %}</label>
+                    <select class="form-select" id="facility" name="facility">
+                        <option value="all" {% if facility_filter == 'all' %}selected{% endif %}>{% if session['lang'] == 'ko' %}모든 시설{% else %}All Facilities{% endif %}</option>
+                        {% for facility in facilities %}
+                        <option value="{{ facility }}" {% if facility_filter == facility %}selected{% endif %}>{{ facility }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="severity" class="form-label">{% if session['lang'] == 'ko' %}심각도{% else %}Severity{% endif %}</label>
+                    <select class="form-select" id="severity" name="severity">
+                        <option value="all" {% if severity_filter == 'all' %}selected{% endif %}>{% if session['lang'] == 'ko' %}모든 심각도{% else %}All Severities{% endif %}</option>
+                        {% for severity in severities %}
+                        <option value="{{ severity }}" {% if severity_filter == severity %}selected{% endif %}>{{ severity }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="vessel_id" class="form-label">{% if session['lang'] == 'ko' %}선박{% else %}Vessel{% endif %}</label>
+                    <select class="form-select" id="vessel_id" name="vessel_id">
+                        <option value="">{% if session['lang'] == 'ko' %}모든 선박{% else %}All Vessels{% endif %}</option>
+                        {% for vessel in vessels %}
+                        <option value="{{ vessel.id }}" {% if vessel_filter == vessel.id %}selected{% endif %}>{{ vessel.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="hostname" class="form-label">{% if session['lang'] == 'ko' %}호스트명{% else %}Hostname{% endif %}</label>
+                    <input type="text" class="form-control" id="hostname" name="hostname" value="{{ hostname_filter }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="process" class="form-label">{% if session['lang'] == 'ko' %}프로세스{% else %}Process{% endif %}</label>
+                    <input type="text" class="form-control" id="process" name="process" value="{{ process_filter }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="message" class="form-label">{% if session['lang'] == 'ko' %}메시지 내용{% else %}Message Content{% endif %}</label>
+                    <input type="text" class="form-control" id="message" name="message" value="{{ message_filter }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">{% if session['lang'] == 'ko' %}시작 날짜{% else %}Start Date{% endif %}</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">{% if session['lang'] == 'ko' %}종료 날짜{% else %}End Date{% endif %}</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter me-1"></i> {% if session['lang'] == 'ko' %}필터 적용{% else %}Apply Filter{% endif %}
+                    </button>
+                    <a href="{{ url_for('syslog_management') }}" class="btn btn-secondary">
+                        <i class="fas fa-undo me-1"></i> {% if session['lang'] == 'ko' %}필터 재설정{% else %}Reset Filters{% endif %}
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Syslog Messages Table -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="mb-0">
+                {% if session['lang'] == 'ko' %}시스템 로그 메시지{% else %}System Log Messages{% endif %}
+                <span class="badge bg-secondary ms-2">{{ logs.total }}</span>
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="160">{% if session['lang'] == 'ko' %}타임스탬프{% else %}Timestamp{% endif %}</th>
+                            <th width="80">{% if session['lang'] == 'ko' %}시설{% else %}Facility{% endif %}</th>
+                            <th width="80">{% if session['lang'] == 'ko' %}심각도{% else %}Severity{% endif %}</th>
+                            <th width="120">{% if session['lang'] == 'ko' %}호스트명{% else %}Hostname{% endif %}</th>
+                            <th width="120">{% if session['lang'] == 'ko' %}프로세스{% else %}Process{% endif %}</th>
+                            <th>{% if session['lang'] == 'ko' %}메시지{% else %}Message{% endif %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs.items %}
+                        <tr class="{% if log.severity in ['emergency', 'alert', 'critical'] %}table-danger{% elif log.severity == 'error' %}table-warning{% elif log.severity == 'warning' %}table-info{% endif %}">
+                            <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ log.facility }}</td>
+                            <td>
+                                <span class="badge {% if log.severity in ['emergency', 'alert', 'critical'] %}bg-danger{% elif log.severity == 'error' %}bg-warning text-dark{% elif log.severity == 'warning' %}bg-info text-dark{% elif log.severity == 'notice' %}bg-primary{% elif log.severity == 'informational' %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {{ log.severity }}
+                                </span>
+                            </td>
+                            <td>{{ log.hostname }}</td>
+                            <td>{{ log.process }}{% if log.pid %} [{{ log.pid }}]{% endif %}</td>
+                            <td>{{ log.message }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-3">
+                                {% if session['lang'] == 'ko' %}
+                                로그 메시지가 없습니다. Syslog 서버가 실행 중인지 확인하고 네트워크 장치 및 시스템이 로그를 보내도록 구성되어 있는지 확인하세요.
+                                {% else %}
+                                No log messages found. Make sure the Syslog server is running and your network devices and systems are configured to send logs.
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if logs.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('syslog_management', page=logs.prev_num, facility=facility_filter, severity=severity_filter, hostname=hostname_filter, process=process_filter, vessel_id=vessel_filter, message=message_filter, start_date=start_date, end_date=end_date) }}">
+                            {% if session['lang'] == 'ko' %}이전{% else %}Previous{% endif %}
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">{% if session['lang'] == 'ko' %}이전{% else %}Previous{% endif %}</span>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in logs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num == logs.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('syslog_management', page=page_num, facility=facility_filter, severity=severity_filter, hostname=hostname_filter, process=process_filter, vessel_id=vessel_filter, message=message_filter, start_date=start_date, end_date=end_date) }}">{{ page_num }}</a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if logs.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('syslog_management', page=logs.next_num, facility=facility_filter, severity=severity_filter, hostname=hostname_filter, process=process_filter, vessel_id=vessel_filter, message=message_filter, start_date=start_date, end_date=end_date) }}">
+                            {% if session['lang'] == 'ko' %}다음{% else %}Next{% endif %}
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">{% if session['lang'] == 'ko' %}다음{% else %}Next{% endif %}</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-close alerts after 5 seconds
+    setTimeout(function() {
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(function(alert) {
+            const closeBtn = new bootstrap.Alert(alert);
+            closeBtn.close();
+        });
+    }, 5000);
+});
+</script>
+{% endblock %}
