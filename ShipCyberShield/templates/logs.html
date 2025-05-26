@@ -1,0 +1,338 @@
+{% extends "layout.html" %}
+
+{% block title %}Security Logs - Maritime NMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2 mb-0"><i class="fas fa-history me-2"></i>Security Logs</h1>
+            <p class="text-muted">Audit records and security event logs (KR GC-44-K, 3.401, Items 13-16)</p>
+        </div>
+        <div class="col-auto">
+            {% if current_user.role.name == 'ADMINISTRATOR' %}
+            <button class="btn btn-primary" onclick="exportLogs()">
+                <i class="fas fa-file-export me-1"></i> Export Logs
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Log Filter Controls -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form action="{{ url_for('logs') }}" method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}">
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}">
+                </div>
+                
+                <div class="col-md-2">
+                    <label for="event_type" class="form-label">Event Type</label>
+                    <select class="form-select" id="event_type" name="event_type">
+                        <option value="all" {% if event_type_filter == 'all' %}selected{% endif %}>All Types</option>
+                        <option value="ACCESS_CONTROL" {% if event_type_filter == 'ACCESS_CONTROL' %}selected{% endif %}>Access Control</option>
+                        <option value="OS_EVENT" {% if event_type_filter == 'OS_EVENT' %}selected{% endif %}>OS Events</option>
+                        <option value="BACKUP_RECOVERY" {% if event_type_filter == 'BACKUP_RECOVERY' %}selected{% endif %}>Backup/Recovery</option>
+                        <option value="CONFIG_CHANGE" {% if event_type_filter == 'CONFIG_CHANGE' %}selected{% endif %}>Config Changes</option>
+                        <option value="COMM_LOSS" {% if event_type_filter == 'COMM_LOSS' %}selected{% endif %}>Communication Loss</option>
+                        <option value="SECURITY_ALARM" {% if event_type_filter == 'SECURITY_ALARM' %}selected{% endif %}>Security Alarms</option>
+                        <option value="DATA_INTEGRITY" {% if event_type_filter == 'DATA_INTEGRITY' %}selected{% endif %}>Data Integrity</option>
+                        <option value="MALWARE_DETECTION" {% if event_type_filter == 'MALWARE_DETECTION' %}selected{% endif %}>Malware Detection</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-2">
+                    <label for="vessel_id" class="form-label">Vessel</label>
+                    <select class="form-select" id="vessel_id" name="vessel_id">
+                        <option value="">All Vessels</option>
+                        {% for vessel in vessels %}
+                        <option value="{{ vessel.id }}" {% if vessel_filter and vessel_filter == vessel.id %}selected{% endif %}>
+                            {{ vessel.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-1"></i> Apply Filters
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Logs Data -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>
+                {% if logs %}Security Logs ({{ logs|length }}){% else %}Security Logs{% endif %}
+            </h5>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary active" id="view-table">
+                    <i class="fas fa-table me-1"></i> Table View
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="view-timeline">
+                    <i class="fas fa-stream me-1"></i> Timeline View
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Table View -->
+            <div id="table-view">
+                {% if logs %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Event Type</th>
+                                <th>User</th>
+                                <th>Vessel</th>
+                                <th>Asset</th>
+                                <th>IP Address</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 
+                                        'danger' if log.event_type.name == 'SECURITY_ALARM' or log.event_type.name == 'MALWARE_DETECTION' else
+                                        'warning' if log.event_type.name == 'ACCESS_CONTROL' or log.event_type.name == 'DATA_INTEGRITY' else
+                                        'info' if log.event_type.name == 'OS_EVENT' else
+                                        'success' if log.event_type.name == 'BACKUP_RECOVERY' else
+                                        'primary' if log.event_type.name == 'CONFIG_CHANGE' else
+                                        'secondary'
+                                    }}">
+                                        {{ log.event_type.name|replace('_', ' ')|title }}
+                                    </span>
+                                </td>
+                                <td>{{ log.user.username if log.user else '-' }}</td>
+                                <td>{{ log.vessel.name if log.vessel else '-' }}</td>
+                                <td>{{ log.cbs_asset.name if log.cbs_asset else '-' }}</td>
+                                <td>{{ log.ip_address if log.ip_address else '-' }}</td>
+                                <td>{{ log.description }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No logs found matching the current filters.
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Timeline View -->
+            <div id="timeline-view" style="display: none;">
+                {% if logs %}
+                <div class="timeline">
+                    {% for log in logs %}
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-{{ 
+                            'danger' if log.event_type.name == 'SECURITY_ALARM' or log.event_type.name == 'MALWARE_DETECTION' else
+                            'warning' if log.event_type.name == 'ACCESS_CONTROL' or log.event_type.name == 'DATA_INTEGRITY' else
+                            'info' if log.event_type.name == 'OS_EVENT' else
+                            'success' if log.event_type.name == 'BACKUP_RECOVERY' else
+                            'primary' if log.event_type.name == 'CONFIG_CHANGE' else
+                            'secondary'
+                        }}"></div>
+                        <div class="timeline-content">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="badge bg-{{ 
+                                    'danger' if log.event_type.name == 'SECURITY_ALARM' or log.event_type.name == 'MALWARE_DETECTION' else
+                                    'warning' if log.event_type.name == 'ACCESS_CONTROL' or log.event_type.name == 'DATA_INTEGRITY' else
+                                    'info' if log.event_type.name == 'OS_EVENT' else
+                                    'success' if log.event_type.name == 'BACKUP_RECOVERY' else
+                                    'primary' if log.event_type.name == 'CONFIG_CHANGE' else
+                                    'secondary'
+                                }}">
+                                    {{ log.event_type.name|replace('_', ' ')|title }}
+                                </span>
+                                <small class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                            </div>
+                            <p class="mb-1">{{ log.description }}</p>
+                            <div class="small text-muted">
+                                {% if log.user %}User: {{ log.user.username }}{% endif %}
+                                {% if log.vessel %} | Vessel: {{ log.vessel.name }}{% endif %}
+                                {% if log.cbs_asset %} | Asset: {{ log.cbs_asset.name }}{% endif %}
+                                {% if log.ip_address %} | IP: {{ log.ip_address }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    No logs found matching the current filters.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Retention Information -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Audit Record Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>KR GC-44-K Requirements</h6>
+                    <ul>
+                        <li><strong>Item 13 - Event Logging</strong>: System maintains logs for security-relevant events</li>
+                        <li><strong>Item 14 - Storage Capacity</strong>: System provides configurable audit record storage capacity</li>
+                        <li><strong>Item 15 - Action on Audit Log Full</strong>: System alerts personnel when storage is near capacity</li>
+                        <li><strong>Item 16 - Timestamps</strong>: System provides timestamps for use in audit records</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>Log Retention Policy</h6>
+                    <p>Security logs are retained according to the following policy:</p>
+                    <ul>
+                        <li>Critical security events: Minimum 2 years</li>
+                        <li>Access control events: 1 year</li>
+                        <li>Configuration changes: 1 year</li>
+                        <li>General operational logs: 180 days</li>
+                    </ul>
+                    <div class="alert alert-info small">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Log exports must be secured and follow the vessel's data protection policy.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+/* Timeline View Custom Styling */
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 1.5rem;
+}
+
+.timeline-item:last-child {
+    padding-bottom: 0;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -30px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    top: 0;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -23px;
+    top: 15px;
+    height: 100%;
+    width: 2px;
+    background-color: #495057;
+}
+
+.timeline-item:last-child::before {
+    display: none;
+}
+
+.timeline-content {
+    border-left: 3px solid var(--bs-secondary);
+    padding: 0.5rem 1rem;
+    background-color: rgba(0,0,0,0.1);
+    border-radius: 0.25rem;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle between table and timeline views
+    const viewTableBtn = document.getElementById('view-table');
+    const viewTimelineBtn = document.getElementById('view-timeline');
+    const tableView = document.getElementById('table-view');
+    const timelineView = document.getElementById('timeline-view');
+    
+    if (viewTableBtn && viewTimelineBtn) {
+        viewTableBtn.addEventListener('click', function() {
+            tableView.style.display = 'block';
+            timelineView.style.display = 'none';
+            viewTableBtn.classList.add('active');
+            viewTimelineBtn.classList.remove('active');
+        });
+        
+        viewTimelineBtn.addEventListener('click', function() {
+            tableView.style.display = 'none';
+            timelineView.style.display = 'block';
+            viewTableBtn.classList.remove('active');
+            viewTimelineBtn.classList.add('active');
+        });
+    }
+    
+    // Date range validation
+    const startDateInput = document.getElementById('start_date');
+    const endDateInput = document.getElementById('end_date');
+    
+    if (startDateInput && endDateInput) {
+        endDateInput.addEventListener('change', function() {
+            if (startDateInput.value && this.value) {
+                const startDate = new Date(startDateInput.value);
+                const endDate = new Date(this.value);
+                
+                if (endDate < startDate) {
+                    alert('End date cannot be earlier than start date');
+                    this.value = startDateInput.value;
+                }
+            }
+        });
+        
+        startDateInput.addEventListener('change', function() {
+            if (endDateInput.value && this.value) {
+                const startDate = new Date(this.value);
+                const endDate = new Date(endDateInput.value);
+                
+                if (endDate < startDate) {
+                    endDateInput.value = this.value;
+                }
+            }
+        });
+    }
+});
+
+// Export logs functionality
+function exportLogs() {
+    // Get current filter values
+    const startDate = document.getElementById('start_date').value;
+    const endDate = document.getElementById('end_date').value;
+    const eventType = document.getElementById('event_type').value;
+    const vesselId = document.getElementById('vessel_id').value;
+    
+    // In a real implementation, this would generate and download a CSV/JSON file
+    alert('This would export logs with the current filters in a real implementation');
+}
+</script>
+{% endblock %}

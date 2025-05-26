@@ -1,0 +1,486 @@
+{% extends 'layout.html' %}
+
+{% block title %}Assets{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="display-5 mb-4">Assets</h1>
+
+            <div class="mb-4">
+                <button type="button" class="btn btn-primary" id="scanButton">
+                    <i class="fas fa-search me-2"></i>Network Scan
+                </button>
+                {# 자동 업데이트 상태 표시를 위한 작은 텍스트 또는 아이콘 추가 가능 #}
+                <small id="autoUpdateStatus" class="text-muted ms-2"></small>
+            </div>
+
+            <div id="scanAlert" class="alert d-none mb-4"></div>
+
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-dark border-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Asset List</h5>
+                    <div>
+                        {# 자산 개수를 동적으로 업데이트하기 위해 span 태그 추가 #}
+                        <span class="badge bg-primary me-2"><span id="assetCount">{{ assets|length }}</span> assets</span>
+                        <div class="btn-group ms-2">
+                            <button class="btn btn-sm btn-outline-light active" id="allAssets">All</button>
+                            <button class="btn btn-sm btn-outline-light" id="hwAssets">HW</button>
+                            <button class="btn btn-sm btn-outline-light" id="swAssets">SW</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>IP Address</th>
+                                    <th>Status</th>
+                                    <th>Last Scan</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assetsTableBody">
+                                {# 초기 로딩: 서버에서 렌더링된 자산 목록 #}
+                                {% for asset in assets %}
+                                <tr data-type="{{ asset.category|default(asset.asset_type|default('hardware')|lower) }}">
+                                    <td>{{ asset.name }}</td>
+                                    <td>{{ asset.asset_type }}</td>
+                                    <td>{{ asset.ip_address }}</td>
+                                    <td>
+                                        <span class="badge {% if asset.status == 'online' %}bg-success{% elif asset.status == 'offline' %}bg-danger{% elif asset.status == 'warning' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                            {{ asset.status | capitalize if asset.status else 'Unknown' }}
+                                        </span>
+                                    </td>
+                                    <td>{{ asset.last_scan.strftime('%Y-%m-%d %H:%M:%S') if asset.last_scan else 'Never' }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info asset-details" data-asset-id="{{ asset.id }}" data-bs-toggle="modal" data-bs-target="#assetDetailsModal">
+                                            <i class="fas fa-info-circle"></i> Details
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center">No assets found.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="scanModal" tabindex="-1" aria-labelledby="scanModalLabel" aria-hidden="true">
+    {# ... 모달 내용 ... #}
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="scanModalLabel">Network Scan Results</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="scanProgress" class="mb-4">
+                    <div class="progress bg-dark">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="text-center mt-2" id="scanStatus">Initializing scan...</div>
+                </div>
+                <input type="hidden" id="subnet" value="192.168.1.0/24"> {# 기본값, 필요시 JS에서 동적 설정 #}
+                <div id="scanResults" class="table-responsive d-none">
+                    <table class="table table-dark table-hover">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Hostname</th>
+                                <th>Device Type</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scanResultsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="assetDetailsModal" tabindex="-1" aria-hidden="true">
+    {# ... 모달 내용 ... #}
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="assetDetailsTitle">Asset Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="assetDetailsBody">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Loading asset details...</p>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                {# Asset Details 모달 내 새로고침 버튼이 필요하다면 여기에 추가 #}
+                {# <button type="button" class="btn btn-primary" id="refreshCurrentAssetBtn"><i class="fas fa-sync-alt me-1"></i> Refresh Details</button> #}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }} {# layout.html의 extra_js 내용을 유지하려면 추가 #}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const assetsTableBody = document.getElementById('assetsTableBody');
+    const scanAlert = document.getElementById('scanAlert');
+    const assetCountSpan = document.getElementById('assetCount');
+    const autoUpdateStatusSpan = document.getElementById('autoUpdateStatus'); // 자동 업데이트 상태 표시용
+
+    // API 엔드포인트 URL - routes.py 또는 api_*.py 에 정의된 라우트 사용
+    // 예: `api_bp` 블루프린트에 `get_assets_api` 함수로 `/api/assets` 가 매핑되어 있다면
+    const assetsApiUrl = "{{ url_for('routes_api_blueprint_api.get_assets_api') }}"; // routes.py의 api_bp.route('/assets') 사용
+    const assetDetailsBaseUrl = "/api/assets"; // 예시: /api/assets/{asset_id}/details
+
+    const AUTO_UPDATE_INTERVAL = 60000; // 60초 = 1분
+
+    function fetchAssetsAndUpdateTable() {
+        if (autoUpdateStatusSpan) {
+            autoUpdateStatusSpan.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating list...';
+        }
+
+        fetch(assetsApiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(assets => {
+                renderAssetsTable(assets);
+                if (autoUpdateStatusSpan) {
+                    autoUpdateStatusSpan.textContent = `List updated at ${new Date().toLocaleTimeString()}`;
+                }
+                // 성공 시 알림창 숨기기 (선택적)
+                if (scanAlert) scanAlert.classList.add('d-none');
+            })
+            .catch(error => {
+                console.error('Error fetching assets for automatic update:', error);
+                if (autoUpdateStatusSpan) {
+                    autoUpdateStatusSpan.textContent = 'Update failed.';
+                }
+                if (scanAlert) {
+                    scanAlert.className = 'alert alert-danger mt-2';
+                    scanAlert.textContent = `Error updating asset list: ${error.message}. Please refresh manually.`;
+                    scanAlert.classList.remove('d-none');
+                }
+            });
+    }
+
+    function renderAssetsTable(assets) {
+        if (!assetsTableBody) return;
+        assetsTableBody.innerHTML = ''; // 기존 목록 비우기
+
+        if (assetCountSpan) {
+            assetCountSpan.textContent = assets ? assets.length : 0;
+        }
+
+        if (!assets || assets.length === 0) {
+            assetsTableBody.innerHTML = '<tr><td colspan="6" class="text-center">No assets found.</td></tr>';
+            return;
+        }
+
+        assets.forEach(asset => {
+            const row = document.createElement('tr');
+            let assetCategory = 'hardware'; // 기본값
+            if (asset.category) { // 'category' 필드가 있다면 사용
+                assetCategory = asset.category.toLowerCase();
+            } else if (asset.asset_type) { // 없다면 'asset_type' 사용
+                assetCategory = asset.asset_type.toLowerCase();
+            }
+            row.dataset.type = assetCategory;
+
+
+            let statusBadgeClass = 'bg-secondary';
+            let statusText = (asset.status || 'Unknown').charAt(0).toUpperCase() + (asset.status || 'Unknown').slice(1);
+
+            if (asset.status === 'online') statusBadgeClass = 'bg-success';
+            else if (asset.status === 'offline') statusBadgeClass = 'bg-danger';
+            else if (asset.status === 'warning') statusBadgeClass = 'bg-warning text-dark';
+
+            let lastScanFormatted = 'Never';
+            if (asset.last_scan) {
+                try {
+                    const date = new Date(asset.last_scan);
+                    lastScanFormatted = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+                } catch (e) {
+                    lastScanFormatted = asset.last_scan;
+                }
+            }
+
+            row.innerHTML = `
+                <td>${asset.name || 'N/A'}</td>
+                <td>${asset.asset_type || 'N/A'}</td>
+                <td>${asset.ip_address || 'N/A'}</td>
+                <td><span class="badge ${statusBadgeClass}">${statusText}</span></td>
+                <td>${lastScanFormatted}</td>
+                <td>
+                    <button class="btn btn-sm btn-info asset-details"
+                            data-asset-id="${asset.id}"
+                            data-bs-toggle="modal"
+                            data-bs-target="#assetDetailsModal">
+                        <i class="fas fa-info-circle"></i> Details
+                    </button>
+                </td>
+            `;
+            assetsTableBody.appendChild(row);
+        });
+
+        // Details 버튼에 이벤트 리스너 다시 연결
+        rebindDetailsButtons();
+        // 현재 활성화된 필터에 따라 테이블 다시 필터링
+        applyCurrentFilter();
+    }
+
+    function rebindDetailsButtons() {
+        document.querySelectorAll('#assetsTableBody .asset-details').forEach(button => {
+            button.addEventListener('click', function() {
+                const assetId = this.dataset.assetId;
+                openAssetDetailsModal(assetId);
+            });
+        });
+    }
+
+    function applyCurrentFilter() {
+        const activeButton = document.querySelector('#assets .btn-group .btn.active'); // #assets 컨테이너 내부의 버튼으로 범위 한정
+        if (activeButton) {
+            if (activeButton.id === 'hwAssets') filterAssetRowsByType('hardware');
+            else if (activeButton.id === 'swAssets') filterAssetRowsByType('software');
+            else filterAssetRowsByType(''); // 'allAssets' 또는 기본 상태
+        }
+    }
+
+
+    // --- 자동 목록 업데이트 시작 ---
+    // 이 기능을 활성화하려면 아래 주석을 해제하세요.
+    // setInterval(fetchAssetsAndUpdateTable, AUTO_UPDATE_INTERVAL);
+    // 페이지 로드 시 한 번 실행 (선택 사항)
+    // fetchAssetsAndUpdateTable();
+
+
+    // --- 기존 필터 버튼 로직 ---
+    const allAssetsBtn = document.getElementById('allAssets');
+    const hwAssetsBtn = document.getElementById('hwAssets');
+    const swAssetsBtn = document.getElementById('swAssets');
+
+    if (allAssetsBtn && hwAssetsBtn && swAssetsBtn && assetsTableBody) {
+        allAssetsBtn.addEventListener('click', function() {
+            setActiveFilterButton(this);
+            filterAssetRowsByType('');
+        });
+        hwAssetsBtn.addEventListener('click', function() {
+            setActiveFilterButton(this);
+            filterAssetRowsByType('hardware');
+        });
+        swAssetsBtn.addEventListener('click', function() {
+            setActiveFilterButton(this);
+            filterAssetRowsByType('software');
+        });
+    }
+
+    function setActiveFilterButton(clickedButton) {
+        [allAssetsBtn, hwAssetsBtn, swAssetsBtn].forEach(btn => {
+            if (btn) btn.classList.remove('active');
+        });
+        if (clickedButton) clickedButton.classList.add('active');
+    }
+
+    function filterAssetRowsByType(category) {
+        const assetRows = assetsTableBody.querySelectorAll('tr');
+        assetRows.forEach(row => {
+            // row.dataset.type이 정의되지 않은 경우를 대비하여 조건 추가
+            const rowType = row.dataset.type ? row.dataset.type.toLowerCase() : 'hardware'; // 기본값을 hardware로 간주하거나, 빈 문자열로 처리
+            if (category === '' || rowType === category) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    // --- Asset Details 모달 관련 로직 ---
+    // 이 함수는 전역에서 접근 가능하도록 window 객체에 할당하거나,
+    // rebindDetailsButtons 내부에서 직접 호출되도록 할 수 있습니다.
+    window.openAssetDetailsModal = function(assetId) {
+        const modalElement = document.getElementById('assetDetailsModal');
+        if (!modalElement) {
+            console.error("AssetDetailsModal element not found in DOM!");
+            return;
+        }
+
+        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        const detailsBody = document.getElementById('assetDetailsBody');
+        const detailsTitle = document.getElementById('assetDetailsTitle');
+
+        detailsBody.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-3">Loading...</p></div>`;
+        modal.show(); // 모달을 먼저 보여주고 내용을 로드
+
+        // routes.py의 api_bp 블루프린트에 정의된 /api/assets/<int:asset_id>/details 엔드포인트 사용
+        fetch(`${assetDetailsBaseUrl}/${assetId}/details`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load asset details (status ${response.status})`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) { // API가 에러 객체를 반환하는 경우
+                    throw new Error(data.error);
+                }
+                renderAssetDetailsInModal(data, detailsBody, detailsTitle);
+            })
+            .catch(error => {
+                console.error('Error loading asset details:', error);
+                detailsBody.innerHTML = `<div class="alert alert-danger" role="alert">Error: ${error.message}</div>`;
+            });
+    }
+
+    function renderAssetDetailsInModal(asset, modalBodyEl, modalTitleEl) {
+        if (!asset) {
+            modalBodyEl.innerHTML = `<div class="alert alert-warning">Asset data is not available.</div>`;
+            return;
+        }
+        modalTitleEl.textContent = `Asset Details: ${asset.name || 'N/A'}`;
+
+        let statusText = (asset.status || 'Unknown').charAt(0).toUpperCase() + (asset.status || 'Unknown').slice(1);
+        let statusBadgeClass = 'alert-secondary'; // 기본값
+        if (asset.status === 'online') statusBadgeClass = 'alert-success';
+        else if (asset.status === 'offline') statusBadgeClass = 'alert-danger';
+        else if (asset.status === 'warning') statusBadgeClass = 'alert-warning';
+
+
+        let lastScanFormatted = 'N/A';
+        // API 응답에서 last_scan 필드는 asset.hardware.last_scan 또는 asset.last_scan 일 수 있음
+        const lastScanTime = (asset.hardware && asset.hardware.last_scan) ? asset.hardware.last_scan : asset.last_scan;
+        if (lastScanTime) {
+            try {
+                const date = new Date(lastScanTime);
+                lastScanFormatted = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+            } catch(e) { lastScanFormatted = lastScanTime; }
+        }
+
+        // API 응답의 `asset.hardware`와 `asset.software` 구조를 참고하여 HTML 생성
+        // 제공된 routes.py의 /api/assets/<int:asset_id>/details 응답 형식을 기반으로 함
+        let htmlContent = `
+            <div class="alert ${statusBadgeClass} d-flex align-items-center" role="alert">
+                <i class="fas ${asset.status === 'online' ? 'fa-check-circle' : (asset.status === 'offline' ? 'fa-times-circle' : 'fa-question-circle')} me-2"></i>
+                <div>Device is currently <strong>${statusText}</strong></div>
+            </div>
+            <div class="card bg-dark border-secondary mb-3">
+                <div class="card-header"><h6 class="mb-0">Basic Information</h6></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6"><p><strong>IP Address:</strong> ${asset.ip_address || 'N/A'}</p></div>
+                        <div class="col-md-6"><p><strong>Name (FQDN):</strong> ${asset.name || 'N/A'}</p></div>
+                        <div class="col-md-6"><p><strong>Asset Type:</strong> ${asset.asset_type || 'N/A'}</p></div>
+                        <div class="col-md-6"><p><strong>Category:</strong> ${(asset.category || 'N/A').charAt(0).toUpperCase() + (asset.category || 'N/A').slice(1)}</p></div>
+                        <div class="col-md-6"><p><strong>Detection Method:</strong> ${asset.detection_method || 'N/A'}</p></div>
+                        <div class="col-md-6"><p><strong>Last Scan/Updated:</strong> ${lastScanFormatted}</p></div>
+                    </div>
+                </div>
+            </div>`;
+
+        // Hardware Details Tab
+        htmlContent += `
+            <ul class="nav nav-tabs mb-3" id="assetModalTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="modal-hw-tab" data-bs-toggle="tab" data-bs-target="#modal-hw-pane" type="button" role="tab">Hardware</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="modal-sw-tab" data-bs-toggle="tab" data-bs-target="#modal-sw-pane" type="button" role="tab">Software</button>
+                </li>
+            </ul>
+            <div class="tab-content" id="assetModalTabContent">
+                <div class="tab-pane fade show active" id="modal-hw-pane" role="tabpanel">
+                    <h6>Hardware Details</h6>`;
+        if (asset.hardware) {
+            htmlContent += `
+                    <table class="table table-sm table-dark table-bordered">
+                        <tr><th width="40%">Brand/Manufacturer</th><td>${asset.hardware.brand || 'N/A'}</td></tr>
+                        <tr><th>Model/Type</th><td>${asset.hardware.model || 'N/A'}</td></tr>
+                        <tr><th>Main Function</th><td>${asset.hardware.main_function || 'N/A'}</td></tr>
+                        <tr><th>Serial Number</th><td>${asset.hardware.serial_number || 'N/A'}</td></tr>
+                        <tr><th>Physical Interfaces</th><td>${asset.hardware.physical_interfaces || 'N/A'}</td></tr>
+                        <tr><th>System Software (OS/Firmware)</th><td>${asset.hardware.system_software || 'N/A'}</td></tr>
+                        <tr><th>OS/Firmware Version</th><td>${asset.hardware.software_version || 'N/A'}</td></tr>
+                        <tr><th>Firmware Version (Specific)</th><td>${asset.hardware.firmware_version || 'N/A'}</td></tr>
+                        <tr><th>Supported Protocols</th><td>${asset.hardware.protocols || 'N/A'}</td></tr>
+                    </table>`;
+        } else {
+            htmlContent += `<p class="text-muted">No detailed hardware information available.</p>`;
+        }
+        htmlContent += `</div>`; // End of Hardware Tab Pane
+
+        // Software Details Tab
+        htmlContent += `<div class="tab-pane fade" id="modal-sw-pane" role="tabpanel">
+                        <h6>Software Details</h6>`;
+        if (asset.software) {
+            htmlContent += `
+                    <table class="table table-sm table-dark table-bordered">
+                        <tr><th width="40%">Installed On Hardware</th><td>${asset.software.hardware_components || 'N/A'}</td></tr>
+                        <tr><th>Brand/Manufacturer</th><td>${asset.software.brand || 'N/A'}</td></tr>
+                        <tr><th>Model/Type</th><td>${asset.software.model || 'N/A'}</td></tr>
+                        <tr><th>Main Function</th><td>${asset.software.main_function || 'N/A'}</td></tr>
+                        <tr><th>Software Version</th><td>${asset.software.version || 'N/A'}</td></tr>
+                        <tr><th>Installation Date</th><td>${asset.software.installed_date ? new Date(asset.software.installed_date).toLocaleDateString() : 'N/A'}</td></tr>
+                        <tr><th>Patch Level</th><td>${asset.software.patch_level || 'N/A'}</td></tr>
+                    </table>`;
+        } else {
+            htmlContent += `<p class="text-muted">No software information available.</p>`;
+        }
+        htmlContent += `</div></div>`; // End of Software Tab Pane & Tab Content
+
+        modalBodyEl.innerHTML = htmlContent;
+    }
+
+
+    // 초기 페이지 로드 시 Details 버튼에 이벤트 핸들러 바인딩
+    rebindDetailsButtons();
+
+    // 기존 Network Scan 버튼 이벤트 리스너 (scanModal 관련)
+    const scanButton = document.getElementById('scanButton');
+    const scanModalInstance = new bootstrap.Modal(document.getElementById('scanModal'));
+    // ... (scanButton 클릭 시 scanModalInstance.show() 및 스캔 로직 호출하는 부분은 assets.html 기존 스크립트에 이미 있을 것으로 가정)
+    // 만약 없다면, 이전 답변의 assets.html 내 scanButton 이벤트 리스너 코드를 참고하여 여기에 추가합니다.
+    // 현재 assets.html의 스크립트에는 수동 Network Scan 버튼에 대한 상세 로직이 없습니다.
+    // 필요하다면 network_scan_simple.html 또는 network_scan.html의 JS 로직을 참고하여 구현해야 합니다.
+    if (scanButton) {
+        scanButton.addEventListener('click', function() {
+            // scanModal을 띄우고, 수동 스캔을 실행하는 로직
+            // network_scan_simple.html의 로직과 유사하게 구현할 수 있습니다.
+            // 여기서는 모달을 띄우는 것만 예시로 남깁니다.
+            scanModalInstance.show();
+            // 여기에 추가로 simplified_scanner.py의 scan_network 함수를 호출하고
+            // 그 결과를 scanResultsBody에 표시하는 로직이 필요합니다.
+            // 예: document.getElementById('scanStatus').textContent = 'Manual scan initiated...';
+            //      실제 스캔 API 호출 및 결과 처리
+        });
+    }
+
+});
+</script>
+{% endblock %}

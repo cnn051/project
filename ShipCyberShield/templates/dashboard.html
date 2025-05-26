@@ -1,0 +1,353 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard - Maritime NMS{% endblock %}
+
+{% block extra_css %}
+<!-- Additional CSS for dashboard -->
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Dashboard Header -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h1 class="h2 mb-0"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h1>
+            <p class="text-muted">Real-time monitoring and management of maritime vessel systems</p>
+        </div>
+    </div>
+
+    <!-- Alert Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card dashboard-card text-white bg-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Critical Alerts</h5>
+                            <p class="display-4 fw-bold mb-0" id="critical-alerts">{{ alert_stats.critical }}</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-exclamation-circle fa-3x opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a href="{{ url_for('alerts', severity='critical') }}" class="text-white">View all <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card dashboard-card text-dark bg-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">High Alerts</h5>
+                            <p class="display-4 fw-bold mb-0" id="high-alerts">{{ alert_stats.high }}</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-exclamation-triangle fa-3x opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a href="{{ url_for('alerts', severity='high') }}" class="text-dark">View all <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card dashboard-card text-white bg-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Medium Alerts</h5>
+                            <p class="display-4 fw-bold mb-0" id="medium-alerts">{{ alert_stats.medium }}</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-bell fa-3x opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a href="{{ url_for('alerts', severity='medium') }}" class="text-white">View all <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card dashboard-card text-white bg-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Low/Info Alerts</h5>
+                            <p class="display-4 fw-bold mb-0" id="low-alerts">{{ alert_stats.low + alert_stats.info }}</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-info-circle fa-3x opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a href="{{ url_for('alerts', severity='low') }}" class="text-white">View all <i class="fas fa-arrow-right ms-1"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Content -->
+    <div class="row">
+        <!-- Left Column -->
+        <div class="col-lg-8">
+            <!-- Vessel Overview -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-ship me-2"></i>Vessel Overview</h5>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="updateVesselData()">
+                        <i class="fas fa-sync-alt me-1"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if vessels %}
+                        <div class="row">
+                            {% for vessel in vessels %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card h-100" id="vessel-card-{{ vessel.id }}">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ vessel.name }}</h5>
+                                        <h6 class="card-subtitle mb-2 text-muted">IMO: {{ vessel.imo_number }}</h6>
+                                        
+                                        <div class="d-flex justify-content-between align-items-center mt-3">
+                                            <div>
+                                                <span class="text-muted">Security Zones:</span>
+                                                <span class="fw-bold">{{ vessel.security_zones|length }}</span>
+                                            </div>
+                                            <div>
+                                                <span class="text-muted">Assets:</span>
+                                                <span class="fw-bold asset-count">{{ vessel.assets|length }}</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="d-flex mt-3">
+                                            <span class="badge bg-danger me-2 critical-badge">
+                                                {{ vessel.alerts|selectattr('severity.name', 'equalto', 'CRITICAL')|selectattr('status.name', 'equalto', 'NEW')|list|length }}
+                                            </span>
+                                            <span class="badge bg-warning me-2 high-badge">
+                                                {{ vessel.alerts|selectattr('severity.name', 'equalto', 'HIGH')|selectattr('status.name', 'equalto', 'NEW')|list|length }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer d-flex justify-content-between">
+                                        <a href="{{ url_for('security_zones', vessel_id=vessel.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-shield-alt me-1"></i> Zones
+                                        </a>
+                                        <a href="{{ url_for('assets', vessel_id=vessel.id) }}" class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-server me-1"></i> Assets
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i> No vessels registered. Use the admin panel to add vessels.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Sensor Data Visualization -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>System Performance</h5>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm btn-outline-secondary">Daily</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary active">Weekly</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary">Monthly</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="sensor-trend-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Latest Sensor Data Table -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table me-2"></i>Latest Sensor Readings</h5>
+                </div>
+                <div class="card-body">
+                    <div id="latest-sensor-readings">
+                        {% if recent_data %}
+                            {% for data in recent_data %}
+                                <div class="border-bottom py-2">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <div class="fw-bold">{{ data.sensor_type }}</div>
+                                            <div class="small text-muted">{{ data.vessel.name }} / {{ data.cbs_asset.name }}</div>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-bold">{{ data.value }} {{ data.unit }}</div>
+                                            <div class="small text-muted">{{ data.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center py-3">No recent sensor readings</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-lg-4">
+            <!-- Alert Distribution Chart -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-pie-chart me-2"></i>Alert Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 250px;">
+                        <canvas id="alert-distribution-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Alerts -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Recent Alerts</h5>
+                    <a href="{{ url_for('alerts') }}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" id="recent-alerts-list">
+                        {% if alerts %}
+                            {% for alert in alerts %}
+                                <div class="list-group-item alert-item {{ alert.severity.name|lower }} border-0">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h6 class="mb-1">{{ alert.title }}</h6>
+                                        <span class="badge bg-{{ alert.severity.name|lower }}">{{ alert.severity.name|capitalize }}</span>
+                                    </div>
+                                    <p class="mb-1 small text-truncate-2">{{ alert.message }}</p>
+                                    <div class="d-flex justify-content-between align-items-center small">
+                                        <span>{{ alert.vessel.name }}</span>
+                                        <span>{{ alert.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="list-group-item text-center py-3">
+                                No active alerts
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Zone Summary -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Security Zone Status</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if vessels %}
+                        <div class="list-group list-group-flush">
+                            {% for vessel in vessels %}
+                                {% if vessel.security_zones %}
+                                    {% for zone in vessel.security_zones %}
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <div class="fw-bold">{{ zone.name }}</div>
+                                                <small class="text-muted">{{ vessel.name }}</small>
+                                            </div>
+                                            <div>
+                                                <span class="badge bg-{{ zone.risk_level|default('medium')|lower }}">
+                                                    {{ zone.risk_level|default('Medium')|capitalize }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="mt-1 small">
+                                            <span class="text-muted">Assets:</span> {{ zone.assets|length }}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="list-group-item">
+                                        <div class="fw-bold">{{ vessel.name }}</div>
+                                        <small class="text-muted">No security zones defined</small>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="list-group-item text-center py-3">
+                            No security zones defined
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- IACS Compliance Status -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Compliance Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            <i class="fas fa-shield-alt fa-2x text-success"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">KR GC-44-K (2024)</div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 92%;" aria-valuenow="92" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                        <div class="ms-auto">
+                            <span class="badge bg-success">92%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            <i class="fas fa-shield-alt fa-2x text-primary"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">IACS UR E26</div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-primary" role="progressbar" style="width: 88%;" aria-valuenow="88" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                        <div class="ms-auto">
+                            <span class="badge bg-primary">88%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <i class="fas fa-shield-alt fa-2x text-info"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">IACS UR E27</div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-info" role="progressbar" style="width: 95%;" aria-valuenow="95" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                        <div class="ms-auto">
+                            <span class="badge bg-info">95%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Dashboard JavaScript -->
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
